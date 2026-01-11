@@ -51,3 +51,6 @@ htmlcov/
 
 # Documentation
 docs/
+
+# Local scripts
+sync_index.sh
