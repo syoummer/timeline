@@ -1,7 +1,10 @@
 """音频转录服务"""
 import os
+import logging
 from typing import Optional
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 API_BASE = os.getenv("AI_BUILDER_API_BASE", "https://space.ai-builders.com")
@@ -48,47 +51,34 @@ async def transcribe_audio(
         files = {"audio_file": (filename, audio_bytes, content_type)}
         
         try:
-            # 尝试两种路径：先尝试带 /backend 前缀，如果失败再尝试不带前缀
-            endpoints = [
-                f"{API_BASE}/backend/v1/audio/transcriptions",
-                f"{API_BASE}/v1/audio/transcriptions"
-            ]
+            # 根据 OpenAPI 文档，服务器基础 URL 是 /backend
+            # 转录端点是 /v1/audio/transcriptions
+            # 所以完整路径是: https://space.ai-builders.com/backend/v1/audio/transcriptions
+            endpoint = f"{API_BASE}/backend/v1/audio/transcriptions"
             
-            response = None
-            last_error = None
+            logger.info(f"[TRANSCRIPTION] 调用转录 API: {endpoint}")
+            logger.info(f"[TRANSCRIPTION] 文件信息: filename={filename}, content_type={content_type}, size={len(audio_bytes)} bytes")
             
-            for endpoint in endpoints:
-                try:
-                    response = await client.post(
-                        endpoint,
-                        headers=headers,
-                        files=files
-                    )
-                    # 如果成功（状态码 < 400），使用这个响应
-                    if response.status_code < 400:
-                        break
-                    # 如果失败，保存错误并尝试下一个端点
-                    last_error = httpx.HTTPStatusError(
-                        f"Request failed with status {response.status_code}",
-                        request=response.request,
-                        response=response
-                    )
-                    response = None
-                except httpx.HTTPStatusError as e:
-                    last_error = e
-                    response = None
-                    continue
+            # 使用 multipart/form-data 格式，字段名为 audio_file
+            # httpx 会自动设置正确的 Content-Type 和 boundary
+            response = await client.post(
+                endpoint,
+                headers=headers,
+                files=files,
+                timeout=120.0  # 增加超时时间，因为音频转录可能需要更长时间
+            )
             
-            # 如果所有端点都失败，抛出最后一个错误
-            if response is None and last_error:
-                raise last_error
+            logger.info(f"[TRANSCRIPTION] API 响应状态: {response.status_code}")
             
             # 检查响应状态
             response.raise_for_status()
             result = response.json()
             
+            logger.info(f"[TRANSCRIPTION] API 响应: {result.keys() if isinstance(result, dict) else 'non-dict response'}")
+            
             # 提取转录文本
             if "text" not in result:
+                logger.error(f"[TRANSCRIPTION] API 响应格式错误，缺少 'text' 字段。完整响应: {result}")
                 raise ValueError(f"API 响应格式错误：缺少 'text' 字段。响应: {result}")
             
             return result["text"]
