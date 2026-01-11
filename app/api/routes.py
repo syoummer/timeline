@@ -152,10 +152,12 @@ async def analyze_text(
                 ).model_dump()
             )
         
-        # 处理 tags 参数
+        # 处理 tags 参数（支持中文和英文逗号）
         tags_list = None
         if tags:
-            tags_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+            # 先替换中文逗号为英文逗号，然后分割
+            tags_normalized = tags.replace("，", ",")
+            tags_list = [tag.strip() for tag in tags_normalized.split(",") if tag.strip()]
             logger.info(f"[EXTRACTION] 提供的标签列表: {tags_list}")
         
         # LLM 事件提取
