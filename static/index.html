@@ -250,6 +250,64 @@
             color: #9ca3af;
             font-size: 14px;
         }
+
+        .export-section {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .export-button {
+            flex: 1;
+            min-width: 140px;
+            padding: 12px 20px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            color: #374151;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .export-button:hover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            color: #3b82f6;
+        }
+
+        .export-button:active {
+            transform: scale(0.98);
+        }
+
+        .export-button.apple {
+            border-color: #007aff;
+            color: #007aff;
+        }
+
+        .export-button.apple:hover {
+            background: #e3f2fd;
+        }
+
+        .export-button.google {
+            border-color: #ea4335;
+            color: #ea4335;
+        }
+
+        .export-button.google:hover {
+            background: #fce8e6;
+        }
     </style>
 </head>
 <body>
@@ -291,6 +349,20 @@
                 <div class="section-title">提取的事件</div>
                 <div class="events-list" id="eventsList"></div>
             </div>
+
+            <div class="export-section" id="exportSection" style="display: none;">
+                <div class="section-title">导出到日历</div>
+                <div class="export-buttons">
+                    <button class="export-button apple" id="exportAppleButton">
+                        <span>📅</span>
+                        <span>Apple Calendar</span>
+                    </button>
+                    <button class="export-button google" id="exportGoogleButton">
+                        <span>📅</span>
+                        <span>Google Calendar</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -309,6 +381,11 @@
         const results = document.getElementById('results');
         const transcriptionText = document.getElementById('transcriptionText');
         const eventsList = document.getElementById('eventsList');
+        const exportSection = document.getElementById('exportSection');
+        const exportAppleButton = document.getElementById('exportAppleButton');
+        const exportGoogleButton = document.getElementById('exportGoogleButton');
+
+        let currentEvents = [];
 
         let mediaRecorder = null;
         let audioChunks = [];
@@ -491,16 +568,21 @@
 
                 transcriptionText.textContent = data.transcription || '（无转录文本）';
                 
-                if (data.events && data.events.length > 0) {
-                    eventsList.innerHTML = data.events.map(event => `
+                // 保存事件数据用于导出
+                currentEvents = data.events || [];
+                
+                if (currentEvents.length > 0) {
+                    eventsList.innerHTML = currentEvents.map(event => `
                         <div class="event-item">
                             <div class="event-title">${escapeHtml(event.title)}</div>
                             <div class="event-time">${formatTimeRange(event.start_time, event.end_time)}</div>
                             ${event.description ? `<div class="event-description">${escapeHtml(event.description)}</div>` : ''}
                         </div>
                     `).join('');
+                    exportSection.style.display = 'block';
                 } else {
                     eventsList.innerHTML = '<div class="empty-state">未提取到事件</div>';
+                    exportSection.style.display = 'none';
                 }
 
                 results.classList.add('active');
@@ -564,6 +646,200 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // 导出到 Apple Calendar (.ics 文件)
+        exportAppleButton.addEventListener('click', () => {
+            if (currentEvents.length === 0) {
+                showError('没有可导出的事件');
+                return;
+            }
+            exportToICS(currentEvents, 'apple');
+        });
+
+        // 导出到 Google Calendar
+        exportGoogleButton.addEventListener('click', () => {
+            if (currentEvents.length === 0) {
+                showError('没有可导出的事件');
+                return;
+            }
+            exportToGoogleCalendar(currentEvents);
+        });
+
+        /**
+         * 导出为 .ics 文件（Apple Calendar 和其他日历应用）
+         */
+        function exportToICS(events, type = 'apple') {
+            const icsContent = generateICS(events);
+            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `timeline-events-${new Date().toISOString().split('T')[0]}.ics`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        /**
+         * 生成 .ics 文件内容
+         */
+        function generateICS(events) {
+            const now = new Date();
+            const timestamp = formatICSDate(now);
+            
+            let ics = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//Timeline//Timeline Calendar//EN',
+                'CALSCALE:GREGORIAN',
+                'METHOD:PUBLISH',
+                `X-WR-CALNAME:Timeline Events`,
+                `X-WR-TIMEZONE:${Intl.DateTimeFormat().resolvedOptions().timeZone}`,
+                ''
+            ];
+
+            events.forEach((event, index) => {
+                const startDate = new Date(event.start_time);
+                const endDate = new Date(event.end_time);
+                
+                ics.push('BEGIN:VEVENT');
+                ics.push(`UID:timeline-${Date.now()}-${index}@timeline.ai`);
+                ics.push(`DTSTAMP:${formatICSDate(now)}`);
+                ics.push(`DTSTART:${formatICSDate(startDate)}`);
+                ics.push(`DTEND:${formatICSDate(endDate)}`);
+                ics.push(`SUMMARY:${escapeICS(event.title)}`);
+                
+                if (event.description) {
+                    ics.push(`DESCRIPTION:${escapeICS(event.description)}`);
+                }
+                
+                ics.push(`CREATED:${formatICSDate(now)}`);
+                ics.push(`LAST-MODIFIED:${formatICSDate(now)}`);
+                ics.push('STATUS:CONFIRMED');
+                ics.push('SEQUENCE:0');
+                ics.push('END:VEVENT');
+                ics.push('');
+            });
+
+            ics.push('END:VCALENDAR');
+            return ics.join('\r\n');
+        }
+
+        /**
+         * 格式化日期为 ICS 格式
+         * ICS 格式：YYYYMMDDTHHmmssZ (UTC) 或 YYYYMMDDTHHmmss+HHMM (带时区)
+         * 从原始 ISO 8601 字符串中提取日期和时区信息，避免时区转换问题
+         */
+        function formatICSDate(dateInput) {
+            let dateStr;
+            
+            if (dateInput instanceof Date) {
+                // 如果是 Date 对象，转换为 ISO 字符串
+                dateStr = dateInput.toISOString();
+            } else {
+                // 使用原始字符串
+                dateStr = dateInput;
+            }
+            
+            // 解析 ISO 8601 格式：2024-01-15T14:00:00+08:00 或 2024-01-15T14:00:00Z
+            const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|([+-])(\d{2}):(\d{2}))?$/);
+            
+            if (!isoMatch) {
+                // 如果无法解析，使用 Date 对象（fallback）
+                const dateObj = dateInput instanceof Date ? dateInput : new Date(dateInput);
+                const year = dateObj.getUTCFullYear();
+                const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(dateObj.getUTCDate()).padStart(2, '0');
+                const hours = String(dateObj.getUTCHours()).padStart(2, '0');
+                const minutes = String(dateObj.getUTCMinutes()).padStart(2, '0');
+                const seconds = String(dateObj.getUTCSeconds()).padStart(2, '0');
+                return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+            }
+            
+            // 提取日期时间部分
+            const year = isoMatch[1];
+            const month = isoMatch[2];
+            const day = isoMatch[3];
+            const hours = isoMatch[4];
+            const minutes = isoMatch[5];
+            const seconds = isoMatch[6];
+            const tzIndicator = isoMatch[7]; // 'Z' 或 '+08:00' 格式
+            
+            if (tzIndicator === 'Z') {
+                // UTC 时间
+                return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+            } else if (tzIndicator && isoMatch[8]) {
+                // 带时区偏移的时间（移除冒号）
+                const sign = isoMatch[8];
+                const tzHours = isoMatch[9];
+                const tzMinutes = isoMatch[10];
+                return `${year}${month}${day}T${hours}${minutes}${seconds}${sign}${tzHours}${tzMinutes}`;
+            } else {
+                // 没有时区信息，假设为 UTC
+                return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+            }
+        }
+
+        /**
+         * 转义 ICS 文件中的特殊字符
+         */
+        function escapeICS(text) {
+            if (!text) return '';
+            return text
+                .replace(/\\/g, '\\\\')
+                .replace(/;/g, '\\;')
+                .replace(/,/g, '\\,')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '');
+        }
+
+        /**
+         * 导出到 Google Calendar（通过 URL）
+         */
+        function exportToGoogleCalendar(events) {
+            if (events.length === 0) return;
+
+            // Google Calendar 一次只能添加一个事件，所以我们添加第一个事件
+            // 或者可以打开多个标签页
+            const event = events[0];
+            const startDate = new Date(event.start_time);
+            const endDate = new Date(event.end_time);
+            
+            // 格式化日期为 Google Calendar 需要的格式 (YYYYMMDDTHHmmssZ)
+            const formatGoogleDate = (date) => {
+                const year = date.getUTCFullYear();
+                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(date.getUTCDate()).padStart(2, '0');
+                const hours = String(date.getUTCHours()).padStart(2, '0');
+                const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+                return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+            };
+
+            const params = new URLSearchParams({
+                action: 'TEMPLATE',
+                text: event.title,
+                dates: `${formatGoogleDate(startDate)}/${formatGoogleDate(endDate)}`,
+                details: event.description || '',
+                sf: 'true',
+                output: 'xml'
+            });
+
+            const url = `https://calendar.google.com/calendar/render?${params.toString()}`;
+            
+            // 打开新窗口
+            window.open(url, '_blank');
+            
+            // 如果有多个事件，提示用户
+            if (events.length > 1) {
+                setTimeout(() => {
+                    if (confirm(`已打开第一个事件。还有 ${events.length - 1} 个事件，是否下载 .ics 文件以导入所有事件？`)) {
+                        exportToICS(events, 'google');
+                    }
+                }, 500);
+            }
         }
     </script>
 </body>

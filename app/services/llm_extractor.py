@@ -2,6 +2,7 @@
 import os
 import json
 import re
+import logging
 from typing import List, Dict, Any
 import httpx
 
@@ -13,6 +14,8 @@ from app.utils.timezone import (
     format_date_str,
     get_past_time_iso
 )
+
+logger = logging.getLogger(__name__)
 
 
 API_BASE = os.getenv("AI_BUILDER_API_BASE", "https://space.ai-builders.com")
@@ -109,7 +112,7 @@ async def extract_events_with_llm(
                 events.append(event)
             except Exception as e:
                 # 跳过无效的事件数据，记录错误但继续处理其他事件
-                print(f"警告：跳过无效的事件数据: {event_data}，错误: {e}")
+                logger.warning(f"警告：跳过无效的事件数据: {event_data}，错误: {e}")
                 continue
         
         return events
