@@ -1,6 +1,8 @@
 """API 路由"""
+import base64
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from fastapi.responses import JSONResponse
+from typing import Optional
 
 from app.models.response import AnalyzeResponse, ErrorResponse, ErrorDetail
 from app.services.transcription import transcribe_audio
@@ -12,22 +14,67 @@ router = APIRouter()
 
 @router.post("/api/v1/analyze", response_model=AnalyzeResponse)
 async def analyze_audio(
-    audio: UploadFile = File(..., description="音频文件"),
     timezone: str = Form(..., description="时区字符串，如 'Asia/Shanghai' 或 '+08:00'"),
-    current_time: str = Form(..., description="ISO 8601 格式的当前时间")
+    current_time: str = Form(..., description="ISO 8601 格式的当前时间"),
+    audio: Optional[UploadFile] = File(None, description="音频文件（支持 m4a、mp3、wav、flac 等格式）"),
+    audio_data: Optional[str] = Form(None, description="音频数据（base64编码），与audio二选一"),
+    audio_filename: Optional[str] = Form(None, description="音频文件名（当使用audio_data时必需）"),
+    audio_content_type: Optional[str] = Form(None, description="音频MIME类型（当使用audio_data时可选，默认audio/m4a）")
 ):
     """
     分析音频文件，提取时间和事件信息
     
-    - **audio**: 音频文件（支持 m4a、mp3、wav、flac 等格式）
+    支持两种方式上传音频：
+    1. **audio**: 音频文件上传（支持 m4a、mp3、wav、flac 等格式）
+    2. **audio_data**: 音频数据（base64编码的字符串），需要配合audio_filename使用
+    
     - **timezone**: 时区字符串
     - **current_time**: 当前时间（ISO 8601 格式）
     
     返回转录文本和提取的事件列表
     """
     try:
-        # 读取音频文件
-        audio_bytes = await audio.read()
+        audio_bytes = None
+        filename = "audio.m4a"
+        content_type = "audio/m4a"
+        
+        # 优先使用文件上传，如果没有则使用base64数据
+        if audio:
+            # 方式1: 文件上传
+            audio_bytes = await audio.read()
+            filename = audio.filename or "audio.m4a"
+            content_type = audio.content_type or "audio/m4a"
+        elif audio_data:
+            # 方式2: base64编码的音频数据
+            try:
+                # 解码base64数据
+                audio_bytes = base64.b64decode(audio_data)
+                filename = audio_filename or "audio.m4a"
+                content_type = audio_content_type or "audio/m4a"
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ErrorResponse(
+                        error=ErrorDetail(
+                            code="INVALID_AUDIO_DATA",
+                            message="音频数据格式错误",
+                            details=f"无法解码base64数据: {str(e)}"
+                        )
+                    ).model_dump()
+                )
+        else:
+            # 两种方式都没有提供
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ErrorResponse(
+                    error=ErrorDetail(
+                        code="MISSING_AUDIO",
+                        message="缺少音频数据",
+                        details="请提供audio文件或audio_data（base64编码）"
+                    )
+                ).model_dump()
+            )
+        
         if not audio_bytes:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -44,8 +91,8 @@ async def analyze_audio(
         try:
             transcript = await transcribe_audio(
                 audio_bytes=audio_bytes,
-                filename=audio.filename or "audio.m4a",
-                content_type=audio.content_type
+                filename=filename,
+                content_type=content_type
             )
         except Exception as e:
             import traceback
