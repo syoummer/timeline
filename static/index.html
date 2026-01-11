@@ -191,6 +191,57 @@
             line-height: 1.6;
         }
 
+        .transcription-textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #374151;
+            font-family: inherit;
+            resize: vertical;
+            background: white;
+        }
+
+        .transcription-textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .analyze-button {
+            margin-top: 12px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            background: #3b82f6;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .analyze-button:hover:not(:disabled) {
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+        }
+
+        .analyze-button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .analyze-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .events-list {
             display: flex;
             flex-direction: column;
@@ -342,7 +393,11 @@
         <div class="results" id="results">
             <div class="transcription-box">
                 <div class="section-title">转录文本</div>
-                <div class="transcription-text" id="transcriptionText"></div>
+                <textarea class="transcription-textarea" id="transcriptionTextarea" placeholder="转录文本将显示在这里，您可以编辑后重新分析..."></textarea>
+                <button class="analyze-button" id="analyzeButton">
+                    <span>🔄</span>
+                    <span>重新分析</span>
+                </button>
             </div>
 
             <div>
@@ -379,7 +434,8 @@
         const loading = document.getElementById('loading');
         const error = document.getElementById('error');
         const results = document.getElementById('results');
-        const transcriptionText = document.getElementById('transcriptionText');
+        const transcriptionTextarea = document.getElementById('transcriptionTextarea');
+        const analyzeButton = document.getElementById('analyzeButton');
         const eventsList = document.getElementById('eventsList');
         const exportSection = document.getElementById('exportSection');
         const exportAppleButton = document.getElementById('exportAppleButton');
@@ -495,8 +551,12 @@
             loading.classList.add('active');
             error.classList.remove('active');
             results.classList.remove('active');
+            analyzeButton.disabled = true;
 
             try {
+                // 步骤1: 先进行转录
+                statusText.textContent = '正在转录音频...';
+                
                 // 根据 MIME 类型确定文件扩展名
                 let extension = 'webm';
                 let filename = 'recording.webm';
@@ -511,65 +571,149 @@
                     filename = 'recording.webm';
                 }
                 
-                const formData = new FormData();
-                formData.append('audio', audioBlob, filename);
-                formData.append('timezone', timezone);
-                formData.append('current_time', new Date().toISOString());
+                const transcribeFormData = new FormData();
+                transcribeFormData.append('audio', audioBlob, filename);
 
-                const response = await fetch('/api/v1/analyze', {
+                const transcribeResponse = await fetch('/api/v1/transcribe', {
                     method: 'POST',
-                    body: formData
+                    body: transcribeFormData
                 });
 
-                let data;
+                let transcribeData;
                 try {
-                    data = await response.json();
+                    transcribeData = await transcribeResponse.json();
                 } catch (e) {
-                    // 如果响应不是 JSON，尝试读取文本
-                    const text = await response.text();
-                    console.error('非 JSON 响应:', text);
-                    throw new Error(`服务器返回错误 (${response.status}): ${text.substring(0, 200)}`);
+                    const text = await transcribeResponse.text();
+                    console.error('转录非 JSON 响应:', text);
+                    throw new Error(`转录服务返回错误 (${transcribeResponse.status}): ${text.substring(0, 200)}`);
                 }
 
-                if (!response.ok) {
-                    // FastAPI 错误响应可能是 detail.error 或直接 detail
-                    console.error('API 错误响应:', {
-                        status: response.status,
-                        data: data,
-                        error: data.error,
-                        detail: data.detail
-                    });
-                    
-                    let errorMsg = '请求失败';
+                if (!transcribeResponse.ok) {
+                    let errorMsg = '转录失败';
                     let errorDetails = '';
                     
-                    // 尝试多种错误格式
-                    if (data.error && data.error.message) {
-                        errorMsg = data.error.message;
-                        errorDetails = data.error.details || data.error.code || '';
-                    } else if (data.detail) {
-                        // FastAPI 可能直接返回 detail 对象
-                        if (typeof data.detail === 'string') {
-                            errorMsg = data.detail;
-                        } else if (data.detail.error) {
-                            errorMsg = data.detail.error.message || '请求失败';
-                            errorDetails = data.detail.error.details || data.detail.error.code || '';
-                        } else if (data.detail.message) {
-                            errorMsg = data.detail.message;
-                            errorDetails = data.detail.details || data.detail.code || '';
+                    if (transcribeData.error && transcribeData.error.message) {
+                        errorMsg = transcribeData.error.message;
+                        errorDetails = transcribeData.error.details || transcribeData.error.code || '';
+                    } else if (transcribeData.detail) {
+                        if (typeof transcribeData.detail === 'string') {
+                            errorMsg = transcribeData.detail;
+                        } else if (transcribeData.detail.error) {
+                            errorMsg = transcribeData.detail.error.message || '转录失败';
+                            errorDetails = transcribeData.detail.error.details || transcribeData.detail.error.code || '';
+                        } else if (transcribeData.detail.message) {
+                            errorMsg = transcribeData.detail.message;
+                            errorDetails = transcribeData.detail.details || transcribeData.detail.code || '';
                         }
-                    } else if (data.message) {
-                        errorMsg = data.message;
+                    } else if (transcribeData.message) {
+                        errorMsg = transcribeData.message;
                     }
                     
                     const fullError = errorDetails ? `${errorMsg} (${errorDetails})` : errorMsg;
                     throw new Error(fullError);
                 }
 
-                transcriptionText.textContent = data.transcription || '（无转录文本）';
+                // 将转录文本写入输入框
+                const transcript = transcribeData.transcription || '';
+                transcriptionTextarea.value = transcript;
                 
+                // 步骤2: 自动进行事件提取
+                if (transcript.trim()) {
+                    statusText.textContent = '正在分析文本...';
+                    await analyzeText(transcript);
+                } else {
+                    results.classList.add('active');
+                    statusText.textContent = '转录完成（无内容）';
+                    statusText.classList.remove('recording');
+                    timeText.textContent = '';
+                }
+                
+            } catch (err) {
+                console.error('处理失败:', err);
+                console.error('错误详情:', {
+                    message: err.message,
+                    stack: err.stack,
+                    name: err.name
+                });
+                
+                let errorMessage = err.message || '处理失败，请重试';
+                
+                if (err.name === 'TypeError' && err.message.includes('fetch')) {
+                    errorMessage = '网络连接失败，请检查网络或服务是否正常运行';
+                }
+                
+                if (err.message.includes('JSON')) {
+                    errorMessage = '服务器响应格式错误，请稍后重试';
+                }
+                
+                showError(errorMessage);
+                statusText.textContent = '处理失败，请重试';
+                statusText.style.color = '#dc2626';
+            } finally {
+                loading.classList.remove('active');
+                recordButton.disabled = false;
+                analyzeButton.disabled = false;
+            }
+        }
+
+        async function analyzeText(transcript) {
+            if (!transcript || !transcript.trim()) {
+                showError('转录文本为空，无法分析');
+                return;
+            }
+
+            loading.classList.add('active');
+            error.classList.remove('active');
+            analyzeButton.disabled = true;
+            statusText.textContent = '正在分析文本...';
+
+            try {
+                const analyzeFormData = new FormData();
+                analyzeFormData.append('transcript', transcript);
+                analyzeFormData.append('timezone', timezone);
+                analyzeFormData.append('current_time', new Date().toISOString());
+
+                const analyzeResponse = await fetch('/api/v1/analyze', {
+                    method: 'POST',
+                    body: analyzeFormData
+                });
+
+                let analyzeData;
+                try {
+                    analyzeData = await analyzeResponse.json();
+                } catch (e) {
+                    const text = await analyzeResponse.text();
+                    console.error('分析非 JSON 响应:', text);
+                    throw new Error(`分析服务返回错误 (${analyzeResponse.status}): ${text.substring(0, 200)}`);
+                }
+
+                if (!analyzeResponse.ok) {
+                    let errorMsg = '分析失败';
+                    let errorDetails = '';
+                    
+                    if (analyzeData.error && analyzeData.error.message) {
+                        errorMsg = analyzeData.error.message;
+                        errorDetails = analyzeData.error.details || analyzeData.error.code || '';
+                    } else if (analyzeData.detail) {
+                        if (typeof analyzeData.detail === 'string') {
+                            errorMsg = analyzeData.detail;
+                        } else if (analyzeData.detail.error) {
+                            errorMsg = analyzeData.detail.error.message || '分析失败';
+                            errorDetails = analyzeData.detail.error.details || analyzeData.detail.error.code || '';
+                        } else if (analyzeData.detail.message) {
+                            errorMsg = analyzeData.detail.message;
+                            errorDetails = analyzeData.detail.details || analyzeData.detail.code || '';
+                        }
+                    } else if (analyzeData.message) {
+                        errorMsg = analyzeData.message;
+                    }
+                    
+                    const fullError = errorDetails ? `${errorMsg} (${errorDetails})` : errorMsg;
+                    throw new Error(fullError);
+                }
+
                 // 保存事件数据用于导出
-                currentEvents = data.events || [];
+                currentEvents = analyzeData.events || [];
                 
                 if (currentEvents.length > 0) {
                     eventsList.innerHTML = currentEvents.map(event => `
@@ -591,34 +735,36 @@
                 timeText.textContent = '';
                 
             } catch (err) {
-                console.error('处理失败:', err);
-                console.error('错误详情:', {
-                    message: err.message,
-                    stack: err.stack,
-                    name: err.name
-                });
+                console.error('分析失败:', err);
                 
-                // 提取更友好的错误信息
                 let errorMessage = err.message || '分析失败，请重试';
                 
-                // 如果是网络错误
                 if (err.name === 'TypeError' && err.message.includes('fetch')) {
                     errorMessage = '网络连接失败，请检查网络或服务是否正常运行';
                 }
                 
-                // 如果是 JSON 解析错误
                 if (err.message.includes('JSON')) {
                     errorMessage = '服务器响应格式错误，请稍后重试';
                 }
                 
                 showError(errorMessage);
-                statusText.textContent = '处理失败，请重试';
+                statusText.textContent = '分析失败，请重试';
                 statusText.style.color = '#dc2626';
             } finally {
                 loading.classList.remove('active');
-                recordButton.disabled = false;
+                analyzeButton.disabled = false;
             }
         }
+
+        // 重新分析按钮点击事件
+        analyzeButton.addEventListener('click', () => {
+            const transcript = transcriptionTextarea.value.trim();
+            if (!transcript) {
+                showError('请先输入或转录文本');
+                return;
+            }
+            analyzeText(transcript);
+        });
 
         function showError(message) {
             error.textContent = message;

@@ -21,17 +21,29 @@ class Event(BaseModel):
         }
 
 
+class TranscribeResponse(BaseModel):
+    """转录响应模型"""
+    success: bool = Field(True, description="是否成功")
+    transcription: str = Field(..., description="转录文本")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "transcription": "我2点去买菜，3点去理发，4点到家"
+            }
+        }
+
+
 class AnalyzeResponse(BaseModel):
     """分析响应模型"""
     success: bool = Field(True, description="是否成功")
-    transcription: str = Field(..., description="转录文本")
     events: List[Event] = Field(default_factory=list, description="提取的事件列表")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "success": True,
-                "transcription": "我2点去买菜，3点去理发，4点到家",
                 "events": [
                     {
                         "title": "买菜",
