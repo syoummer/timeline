@@ -95,7 +95,7 @@ async def extract_events_with_llm(
                     {"role": "user", "content": prompts["user"]}
                 ],
                 "temperature": 0.3,
-                "max_tokens": 2000
+                "max_tokens": 4000
             }
         )
         
@@ -106,7 +106,17 @@ async def extract_events_with_llm(
         if "choices" not in result or len(result["choices"]) == 0:
             raise ValueError(f"LLM API 响应格式错误：缺少 'choices' 字段。响应: {result}")
         
-        content = result["choices"][0]["message"]["content"]
+        choice = result["choices"][0]
+        
+        # 检查响应是否被截断
+        finish_reason = choice.get("finish_reason")
+        if finish_reason == "length":
+            raise ValueError(
+                "LLM 响应被截断（达到 max_tokens 限制）。"
+                "请尝试减少输入文本长度或增加 max_tokens 限制。"
+            )
+        
+        content = choice["message"]["content"]
         if not content:
             raise ValueError("LLM 返回的内容为空")
         
