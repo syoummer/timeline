@@ -5,8 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from dotenv import load_dotenv
 
-# 加载 .env 文件
-load_dotenv()
+# 加载 .env 文件（如果存在）
+# 在部署环境中，环境变量会直接注入，不需要 .env 文件
+load_dotenv(override=False)
 
 from app.api import routes
 
