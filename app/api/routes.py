@@ -218,6 +218,7 @@ async def analyze_audio(
 
 
 @router.post("/api/v1/analyze-json", response_model=AnalyzeResponse)
+@router.post("/api/v1/analyze_json", response_model=AnalyzeResponse)  # 兼容下划线版本
 async def analyze_audio_json(request: AnalyzeJSONRequest):
     """
     分析音频文件（JSON格式，用于 Shortcut 等场景）
@@ -235,7 +236,9 @@ async def analyze_audio_json(request: AnalyzeJSONRequest):
     try:
         # 解码base64数据
         try:
-            audio_bytes = base64.b64decode(request.audio_data)
+            # 移除可能的换行符和空白字符（Shortcut 可能每76字符换行）
+            audio_data_clean = request.audio_data.replace('\n', '').replace('\r', '').replace(' ', '')
+            audio_bytes = base64.b64decode(audio_data_clean)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -293,7 +296,7 @@ async def api_info():
         "description": "语音驱动的日程记录工具 API",
         "endpoints": {
             "analyze": "/api/v1/analyze",
-            "analyze_json": "/api/v1/analyze-json",
+            "analyze_json": "/api/v1/analyze-json (或 /api/v1/analyze_json)",
             "health": "/health"
         }
     }
