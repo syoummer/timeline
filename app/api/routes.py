@@ -147,8 +147,10 @@ async def analyze_audio(
         elif audio_data:
             # 方式2: base64编码的音频数据
             try:
+                # 移除可能的换行符和空白字符（Shortcut 可能每76字符换行）
+                audio_data_clean = audio_data.replace('\n', '').replace('\r', '').replace(' ', '')
                 # 解码base64数据
-                audio_bytes = base64.b64decode(audio_data)
+                audio_bytes = base64.b64decode(audio_data_clean)
                 filename = audio_filename or "audio.m4a"
                 content_type = audio_content_type or "audio/m4a"
             except Exception as e:
