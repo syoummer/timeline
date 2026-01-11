@@ -132,6 +132,37 @@
             font-weight: 500;
         }
 
+        .tags-input-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .tags-label {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .tags-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #374151;
+            font-family: inherit;
+            background: white;
+        }
+
+        .tags-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+
         .loading {
             display: none;
             text-align: center;
@@ -280,6 +311,17 @@
             line-height: 1.5;
         }
 
+        .event-tag {
+            display: inline-block;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: #eff6ff;
+            color: #3b82f6;
+            margin-top: 6px;
+            font-weight: 500;
+        }
+
         .error {
             display: none;
             background: #fef2f2;
@@ -381,6 +423,19 @@
                 <span class="info-label">当前时间</span>
                 <span class="info-value" id="currentTime"></span>
             </div>
+            <div class="tags-input-section">
+                <label class="tags-label" for="tagsInput">标签列表（逗号分隔，用于事件分类）</label>
+                <input type="text" class="tags-input" id="tagsInput" placeholder="工作，生活，学习" value="工作，生活，学习">
+            </div>
+        </div>
+
+        <div class="transcription-box">
+            <div class="section-title">输入文本（可手动输入或录音后自动填入）</div>
+            <textarea class="transcription-textarea" id="transcriptionTextarea" placeholder="手动输入文字，或录音后文本会自动填入这里..."></textarea>
+            <button class="analyze-button" id="analyzeButton">
+                <span>📝</span>
+                <span>分析</span>
+            </button>
         </div>
 
         <div class="loading" id="loading">
@@ -391,15 +446,6 @@
         <div class="error" id="error"></div>
 
         <div class="results" id="results">
-            <div class="transcription-box">
-                <div class="section-title">转录文本</div>
-                <textarea class="transcription-textarea" id="transcriptionTextarea" placeholder="转录文本将显示在这里，您可以编辑后重新分析..."></textarea>
-                <button class="analyze-button" id="analyzeButton">
-                    <span>🔄</span>
-                    <span>重新分析</span>
-                </button>
-            </div>
-
             <div>
                 <div class="section-title">提取的事件</div>
                 <div class="events-list" id="eventsList"></div>
@@ -440,6 +486,7 @@
         const exportSection = document.getElementById('exportSection');
         const exportAppleButton = document.getElementById('exportAppleButton');
         const exportGoogleButton = document.getElementById('exportGoogleButton');
+        const tagsInput = document.getElementById('tagsInput');
 
         let currentEvents = [];
 
@@ -574,7 +621,7 @@
                 const transcribeFormData = new FormData();
                 transcribeFormData.append('audio', audioBlob, filename);
 
-                const transcribeResponse = await fetch('/api/v1/transcribe', {
+                const transcribeResponse = await fetch('https://timeline.ai-builders.space/api/v1/transcribe', {
                     method: 'POST',
                     body: transcribeFormData
                 });
@@ -672,8 +719,14 @@
                 analyzeFormData.append('transcript', transcript);
                 analyzeFormData.append('timezone', timezone);
                 analyzeFormData.append('current_time', new Date().toISOString());
+                
+                // 添加 tags 参数（如果有值）
+                const tagsValue = tagsInput.value.trim();
+                if (tagsValue) {
+                    analyzeFormData.append('tags', tagsValue);
+                }
 
-                const analyzeResponse = await fetch('/api/v1/analyze', {
+                const analyzeResponse = await fetch('https://timeline.ai-builders.space/api/v1/analyze', {
                     method: 'POST',
                     body: analyzeFormData
                 });
@@ -716,13 +769,18 @@
                 currentEvents = analyzeData.events || [];
                 
                 if (currentEvents.length > 0) {
-                    eventsList.innerHTML = currentEvents.map(event => `
+                    eventsList.innerHTML = currentEvents.map(event => {
+                        // 如果 tag 为 null 或 undefined，显示"默认"
+                        const displayTag = event.tag || '默认';
+                        return `
                         <div class="event-item">
                             <div class="event-title">${escapeHtml(event.title)}</div>
                             <div class="event-time">${formatTimeRange(event.start_time, event.end_time)}</div>
                             ${event.description ? `<div class="event-description">${escapeHtml(event.description)}</div>` : ''}
+                            <div class="event-tag">${escapeHtml(displayTag)}</div>
                         </div>
-                    `).join('');
+                    `;
+                    }).join('');
                     exportSection.style.display = 'block';
                 } else {
                     eventsList.innerHTML = '<div class="empty-state">未提取到事件</div>';
@@ -756,13 +814,15 @@
             }
         }
 
-        // 重新分析按钮点击事件
+        // 分析按钮点击事件
         analyzeButton.addEventListener('click', () => {
             const transcript = transcriptionTextarea.value.trim();
             if (!transcript) {
-                showError('请先输入或转录文本');
+                showError('请输入或转录文本');
                 return;
             }
+            // 显示结果区域
+            results.classList.add('active');
             analyzeText(transcript);
         });
 

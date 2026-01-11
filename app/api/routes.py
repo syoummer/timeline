@@ -122,7 +122,8 @@ async def transcribe_audio_endpoint(
 async def analyze_text(
     transcript: str = Form(..., description="转录文本"),
     timezone: str = Form(..., description="时区字符串，如 'Asia/Shanghai' 或 '+08:00'"),
-    current_time: str = Form(..., description="ISO 8601 格式的当前时间")
+    current_time: str = Form(..., description="ISO 8601 格式的当前时间"),
+    tags: str = Form(None, description="可选的标签列表（逗号分隔）")
 ):
     """
     分析转录文本，提取时间和事件信息
@@ -151,13 +152,20 @@ async def analyze_text(
                 ).model_dump()
             )
         
+        # 处理 tags 参数
+        tags_list = None
+        if tags:
+            tags_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+            logger.info(f"[EXTRACTION] 提供的标签列表: {tags_list}")
+        
         # LLM 事件提取
         logger.info(f"[EXTRACTION] 开始事件提取 - timezone: {timezone}, current_time: {current_time}")
         try:
             events = await extract_events_with_llm(
                 transcript=transcript,
                 current_time_iso=current_time,
-                timezone_str=timezone
+                timezone_str=timezone,
+                tags=tags_list
             )
             logger.info(f"[EXTRACTION] 事件提取成功 - 提取到 {len(events)} 个事件")
             for i, event in enumerate(events):

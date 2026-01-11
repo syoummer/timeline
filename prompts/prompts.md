@@ -20,6 +20,7 @@
 2. **start_time** (开始时间) - 必需，ISO 8601 格式
 3. **end_time** (结束时间) - 必需，ISO 8601 格式
 4. **description** (详细描述) - 可选，包含地点、参与人等
+5. **tag** (标签/分类) - 可选，如果提供了标签列表，尝试将事件归类到其中一个标签；如果无法归类或没有提供标签列表，设为 `null`
 
 **当前时间信息**：
 - 当前时间：{current_time_str}
@@ -27,6 +28,8 @@
 - 当前日期：{current_date}
 - 30分钟前（ISO）：{past_30min_str}
 - 时区：{timezone}
+
+{tags_section}
 
 **示例**：
 
@@ -45,5 +48,6 @@
 转录文本：{transcript}
 当前时间：{current_time_str}
 时区：{timezone}
+{tags_user_section}
 
-请从上述转录文本中提取所有完整的时间段信息，并返回 JSON 数组格式。每个时间段必须包含 title、start_time、end_time，可选 description。
+请从上述转录文本中提取所有完整的时间段信息，并返回 JSON 数组格式。每个时间段必须包含 title、start_time、end_time，可选 description{tag_field_section}。

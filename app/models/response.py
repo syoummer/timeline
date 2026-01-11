@@ -9,6 +9,7 @@ class Event(BaseModel):
     start_time: str = Field(..., description="开始时间，ISO 8601 格式")
     end_time: str = Field(..., description="结束时间，ISO 8601 格式")
     description: Optional[str] = Field(None, description="事件描述（包含地点、参与人等）")
+    tag: Optional[str] = Field(None, description="事件标签/分类（可选）")
     
     class Config:
         json_schema_extra = {
@@ -16,7 +17,8 @@ class Event(BaseModel):
                 "title": "买菜",
                 "start_time": "2024-01-15T14:00:00+08:00",
                 "end_time": "2024-01-15T15:00:00+08:00",
-                "description": "地点：超市"
+                "description": "地点：超市",
+                "tag": "生活"
             }
         }
 

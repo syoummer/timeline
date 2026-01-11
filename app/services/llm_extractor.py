@@ -3,7 +3,7 @@ import os
 import json
 import re
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import httpx
 
 from app.models.response import Event
@@ -25,7 +25,8 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3-flash-preview")
 async def extract_events_with_llm(
     transcript: str,
     current_time_iso: str,
-    timezone_str: str
+    timezone_str: str,
+    tags: Optional[List[str]] = None
 ) -> List[Event]:
     """
     使用 LLM 从转录文本中提取事件
@@ -34,6 +35,7 @@ async def extract_events_with_llm(
         transcript: 转录文本
         current_time_iso: ISO 8601 格式的当前时间
         timezone_str: 时区字符串
+        tags: 可选的标签列表，用于事件分类
     
     Returns:
         事件列表
@@ -58,6 +60,19 @@ async def extract_events_with_llm(
         "transcript": transcript,
         "timezone": timezone_str
     }
+    
+    # 如果有 tags，添加到变量中
+    if tags and len(tags) > 0:
+        variables["tags"] = ", ".join(tags)
+        variables["tags_list"] = ", ".join([f'"{tag}"' for tag in tags])
+        variables["tags_section"] = f"""**标签分类**：
+如果提供了标签列表，请尝试将每个事件归类到其中一个标签。可用的标签列表：{variables["tags_list"]}。如果事件无法明确归类到任何标签，则将 tag 字段设为 `null`。"""
+        variables["tags_user_section"] = f"可用标签：{variables['tags']}"
+        variables["tag_field_section"] = " 和 tag"
+    else:
+        variables["tags_section"] = ""
+        variables["tags_user_section"] = ""
+        variables["tag_field_section"] = ""
     
     # 加载并替换 Prompt 模板
     prompts = get_prompts_with_variables(variables)
@@ -104,10 +119,24 @@ async def extract_events_with_llm(
         if not isinstance(events_data, list):
             raise ValueError(f"LLM 返回的数据不是数组格式: {type(events_data)}")
         
-        # 转换为 Event 对象
+        # 转换为 Event 对象并验证 tag
         events = []
         for event_data in events_data:
             try:
+                # 验证和设置 tag 字段
+                event_tag = event_data.get("tag")
+                if tags and len(tags) > 0:
+                    # 如果提供了 tags，验证 tag 是否在列表中
+                    if event_tag and event_tag in tags:
+                        # tag 在列表中，使用该值
+                        pass
+                    else:
+                        # tag 不在列表中或为 None，设为 None
+                        event_data["tag"] = None
+                else:
+                    # 没有提供 tags，设为 None
+                    event_data["tag"] = None
+                
                 event = Event(**event_data)
                 events.append(event)
             except Exception as e:
