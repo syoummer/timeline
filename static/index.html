@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeline - 语音日程记录</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            max-width: 600px;
+            width: 100%;
+            padding: 48px 32px;
+        }
+
+        h1 {
+            color: #1a1a1a;
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .recording-section {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .record-button {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 2px solid #e5e7eb;
+            background: white;
+            color: #3b82f6;
+            font-size: 32px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+        }
+
+        .record-button:hover:not(:disabled) {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            transform: scale(1.05);
+        }
+
+        .record-button.recording {
+            background: #ef4444;
+            border-color: #ef4444;
+            color: white;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .record-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+            }
+        }
+
+        .status-text {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .status-text.recording {
+            color: #ef4444;
+        }
+
+        .time-text {
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .info-section {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 13px;
+        }
+
+        .info-label {
+            color: #6b7280;
+        }
+
+        .info-value {
+            color: #1a1a1a;
+            font-weight: 500;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 24px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #e5e7eb;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .results {
+            display: none;
+            margin-top: 32px;
+        }
+
+        .results.active {
+            display: block;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 12px;
+        }
+
+        .transcription-box {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            border-left: 3px solid #3b82f6;
+        }
+
+        .transcription-text {
+            color: #374151;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .events-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .event-item {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            transition: all 0.2s;
+        }
+
+        .event-item:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+        }
+
+        .event-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .event-time {
+            font-size: 13px;
+            color: #3b82f6;
+            margin-bottom: 6px;
+        }
+
+        .event-description {
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .error {
+            display: none;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 24px;
+            color: #dc2626;
+            font-size: 14px;
+        }
+
+        .error.active {
+            display: block;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 32px;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Timeline</h1>
+        <p class="subtitle">语音记录你的日程安排</p>
+
+        <div class="recording-section">
+            <button class="record-button" id="recordButton">🎤</button>
+            <div class="status-text" id="statusText">点击按钮开始录音</div>
+            <div class="time-text" id="timeText"></div>
+        </div>
+
+        <div class="info-section">
+            <div class="info-row">
+                <span class="info-label">时区</span>
+                <span class="info-value" id="timezone"></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">当前时间</span>
+                <span class="info-value" id="currentTime"></span>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">正在处理音频...</div>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="results" id="results">
+            <div class="transcription-box">
+                <div class="section-title">转录文本</div>
+                <div class="transcription-text" id="transcriptionText"></div>
+            </div>
+
+            <div>
+                <div class="section-title">提取的事件</div>
+                <div class="events-list" id="eventsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const currentTime = new Date().toISOString();
+
+        document.getElementById('timezone').textContent = timezone;
+        document.getElementById('currentTime').textContent = new Date().toLocaleString('zh-CN');
+
+        const recordButton = document.getElementById('recordButton');
+        const statusText = document.getElementById('statusText');
+        const timeText = document.getElementById('timeText');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        const results = document.getElementById('results');
+        const transcriptionText = document.getElementById('transcriptionText');
+        const eventsList = document.getElementById('eventsList');
+
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingStartTime = null;
+        let recordingTimer = null;
+        let isRecording = false;
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            recordButton.disabled = true;
+            statusText.textContent = '浏览器不支持录音功能';
+            statusText.style.color = '#dc2626';
+        }
+
+        recordButton.addEventListener('click', async () => {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                await startRecording();
+            }
+        });
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // 尝试使用支持的格式，优先使用 WAV
+                let mimeType = 'audio/webm;codecs=opus';
+                if (MediaRecorder.isTypeSupported('audio/wav')) {
+                    mimeType = 'audio/wav';
+                } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    mimeType = 'audio/webm';
+                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    mimeType = 'audio/mp4';
+                }
+                
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: mimeType
+                });
+
+                audioChunks = [];
+                isRecording = true;
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = async () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                    await processRecording(audioBlob, mediaRecorder.mimeType);
+                };
+
+                mediaRecorder.start();
+                recordingStartTime = Date.now();
+                
+                recordButton.classList.add('recording');
+                recordButton.textContent = '⏹';
+                statusText.textContent = '正在录音...';
+                statusText.classList.add('recording');
+                recordButton.disabled = false;
+                
+                startTimer();
+                error.classList.remove('active');
+                results.classList.remove('active');
+                
+            } catch (err) {
+                console.error('录音失败:', err);
+                showError('无法访问麦克风，请检查权限设置');
+                recordButton.disabled = false;
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                
+                recordButton.classList.remove('recording');
+                recordButton.textContent = '🎤';
+                statusText.textContent = '录音完成，正在处理...';
+                statusText.classList.remove('recording');
+                recordButton.disabled = true;
+                
+                stopTimer();
+            }
+        }
+
+        function startTimer() {
+            recordingTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                timeText.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (recordingTimer) {
+                clearInterval(recordingTimer);
+                recordingTimer = null;
+            }
+        }
+
+        async function processRecording(audioBlob, mimeType) {
+            loading.classList.add('active');
+            error.classList.remove('active');
+            results.classList.remove('active');
+
+            try {
+                // 根据 MIME 类型确定文件扩展名
+                let extension = 'webm';
+                let filename = 'recording.webm';
+                if (mimeType.includes('wav')) {
+                    extension = 'wav';
+                    filename = 'recording.wav';
+                } else if (mimeType.includes('mp4')) {
+                    extension = 'm4a';
+                    filename = 'recording.m4a';
+                } else if (mimeType.includes('webm')) {
+                    extension = 'webm';
+                    filename = 'recording.webm';
+                }
+                
+                const formData = new FormData();
+                formData.append('audio', audioBlob, filename);
+                formData.append('timezone', timezone);
+                formData.append('current_time', new Date().toISOString());
+
+                const response = await fetch('/api/v1/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                let data;
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    // 如果响应不是 JSON，尝试读取文本
+                    const text = await response.text();
+                    console.error('非 JSON 响应:', text);
+                    throw new Error(`服务器返回错误 (${response.status}): ${text.substring(0, 200)}`);
+                }
+
+                if (!response.ok) {
+                    // FastAPI 错误响应可能是 detail.error 或直接 detail
+                    console.error('API 错误响应:', {
+                        status: response.status,
+                        data: data,
+                        error: data.error,
+                        detail: data.detail
+                    });
+                    
+                    let errorMsg = '请求失败';
+                    let errorDetails = '';
+                    
+                    // 尝试多种错误格式
+                    if (data.error && data.error.message) {
+                        errorMsg = data.error.message;
+                        errorDetails = data.error.details || data.error.code || '';
+                    } else if (data.detail) {
+                        // FastAPI 可能直接返回 detail 对象
+                        if (typeof data.detail === 'string') {
+                            errorMsg = data.detail;
+                        } else if (data.detail.error) {
+                            errorMsg = data.detail.error.message || '请求失败';
+                            errorDetails = data.detail.error.details || data.detail.error.code || '';
+                        } else if (data.detail.message) {
+                            errorMsg = data.detail.message;
+                            errorDetails = data.detail.details || data.detail.code || '';
+                        }
+                    } else if (data.message) {
+                        errorMsg = data.message;
+                    }
+                    
+                    const fullError = errorDetails ? `${errorMsg} (${errorDetails})` : errorMsg;
+                    throw new Error(fullError);
+                }
+
+                transcriptionText.textContent = data.transcription || '（无转录文本）';
+                
+                if (data.events && data.events.length > 0) {
+                    eventsList.innerHTML = data.events.map(event => `
+                        <div class="event-item">
+                            <div class="event-title">${escapeHtml(event.title)}</div>
+                            <div class="event-time">${formatTimeRange(event.start_time, event.end_time)}</div>
+                            ${event.description ? `<div class="event-description">${escapeHtml(event.description)}</div>` : ''}
+                        </div>
+                    `).join('');
+                } else {
+                    eventsList.innerHTML = '<div class="empty-state">未提取到事件</div>';
+                }
+
+                results.classList.add('active');
+                statusText.textContent = '处理完成';
+                statusText.classList.remove('recording');
+                timeText.textContent = '';
+                
+            } catch (err) {
+                console.error('处理失败:', err);
+                console.error('错误详情:', {
+                    message: err.message,
+                    stack: err.stack,
+                    name: err.name
+                });
+                
+                // 提取更友好的错误信息
+                let errorMessage = err.message || '分析失败，请重试';
+                
+                // 如果是网络错误
+                if (err.name === 'TypeError' && err.message.includes('fetch')) {
+                    errorMessage = '网络连接失败，请检查网络或服务是否正常运行';
+                }
+                
+                // 如果是 JSON 解析错误
+                if (err.message.includes('JSON')) {
+                    errorMessage = '服务器响应格式错误，请稍后重试';
+                }
+                
+                showError(errorMessage);
+                statusText.textContent = '处理失败，请重试';
+                statusText.style.color = '#dc2626';
+            } finally {
+                loading.classList.remove('active');
+                recordButton.disabled = false;
+            }
+        }
+
+        function showError(message) {
+            error.textContent = message;
+            error.classList.add('active');
+        }
+
+        function formatTimeRange(start, end) {
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            
+            const formatTime = (date) => {
+                return date.toLocaleString('zh-CN', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+            };
+
+            return `${formatTime(startDate)} - ${formatTime(endDate)}`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
