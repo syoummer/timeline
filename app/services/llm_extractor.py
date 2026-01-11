@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 import httpx
 
 from app.models.response import Event
-from app.utils.prompt_loader import get_prompts_with_variables
+from app.utils.prompt_loader import get_prompts_with_variables, load_prompts, replace_prompt_variables
 from app.utils.timezone import (
     get_current_time_in_timezone,
     format_time_str,
@@ -61,25 +61,16 @@ async def extract_events_with_llm(
         "timezone": timezone_str
     }
     
-    # 如果有 tags，添加到变量中
+    # 加载 Prompt 模板（需要先加载以获取 tags_section_template）
+    prompt_templates = load_prompts()
+    
+    # 如果有 tags，添加到变量中并生成 tags_section
     if tags and len(tags) > 0:
         variables["tags"] = ", ".join(tags)
         variables["tags_list"] = ", ".join([f'"{tag}"' for tag in tags])
-        variables["tags_section"] = f"""**标签分类**（重要）：
-用户提供了自定义标签列表：{variables["tags_list"]}。
-
-你必须主动分析每个事件的内容（包括 title、description 等），智能判断并匹配到最合适的标签。请理解每个标签的含义，根据事件的实际内容进行归类：
-- 仔细分析事件的 title 和 description
-- 理解每个标签的含义和适用范围
-- 选择最匹配的标签（如果事件符合多个标签，选择最贴切的一个）
-- 如果事件无法明确归类到任何提供的标签，则将 tag 字段设为 `null`
-
-示例：如果标签列表是 ["工作", "生活", "学习", "运动"]，那么：
-- "开会"、"写代码"、"处理邮件" → tag="工作"
-- "吃饭"、"购物"、"看电影" → tag="生活"
-- "看书"、"上课"、"做作业" → tag="学习"
-- "跑步"、"健身"、"打球" → tag="运动"
-- "通勤"、"等车"（如果标签列表中没有对应项） → tag=null"""
+        # 从模板中读取 tags_section_template 并替换变量
+        tags_template = prompt_templates.get("tags_section_template", "")
+        variables["tags_section"] = replace_prompt_variables(tags_template, variables)
         variables["tags_user_section"] = f"可用标签：{variables['tags']}"
         variables["tag_field_section"] = " 和 tag"
     else:
