@@ -1,12 +1,9 @@
 """API 路由"""
-import base64
 import logging
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from fastapi.responses import JSONResponse
-from typing import Optional
 
 from app.models.response import AnalyzeResponse, ErrorResponse, ErrorDetail
-from app.models.request import AnalyzeJSONRequest
 from app.services.transcription import transcribe_audio
 from app.services.llm_extractor import extract_events_with_llm
 
@@ -131,79 +128,28 @@ async def process_audio_analysis(
 async def analyze_audio(
     timezone: str = Form(..., description="时区字符串，如 'Asia/Shanghai' 或 '+08:00'"),
     current_time: str = Form(..., description="ISO 8601 格式的当前时间"),
-    audio: Optional[UploadFile] = File(None, description="音频文件（支持 m4a、mp3、wav、flac 等格式）"),
-    audio_data: Optional[str] = Form(None, description="音频数据（base64编码），与audio二选一"),
-    audio_filename: Optional[str] = Form("audio.m4a", description="音频文件名（当使用audio_data时可选，默认audio.m4a）"),
-    audio_content_type: Optional[str] = Form("audio/m4a", description="音频MIME类型（当使用audio_data时可选，默认audio/m4a）")
+    audio: UploadFile = File(..., description="音频文件（支持 m4a、mp3、wav、flac、webm 等格式）")
 ):
     """
     分析音频文件，提取时间和事件信息
     
-    支持两种方式上传音频：
-    1. **audio**: 音频文件上传（支持 m4a、mp3、wav、flac 等格式）
-    2. **audio_data**: 音频数据（base64编码的字符串），需要配合audio_filename使用
-    
-    - **timezone**: 时区字符串
-    - **current_time**: 当前时间（ISO 8601 格式）
+    - **timezone**: 时区字符串（如 'Asia/Shanghai' 或 '+08:00'）
+    - **current_time**: 当前时间（ISO 8601 格式，如 '2024-01-15T14:30:00+08:00'）
+    - **audio**: 音频文件（支持 m4a、mp3、wav、flac、webm 等格式）
     
     返回转录文本和提取的事件列表
     """
     try:
         # 添加详细的请求日志
         logger.info(f"[REQUEST] 收到分析请求 - timezone: {timezone}, current_time: {current_time[:50] if current_time else None}")
-        logger.info(f"[REQUEST] audio 文件: {audio is not None}, audio_data 长度: {len(audio_data) if audio_data else 0}")
-        logger.info(f"[REQUEST] audio_filename: {audio_filename}, audio_content_type: {audio_content_type}")
+        logger.info(f"[REQUEST] audio 文件: filename={audio.filename}, content_type={audio.content_type}")
         
-        audio_bytes = None
-        filename = "audio.m4a"
-        content_type = "audio/m4a"
+        # 读取音频文件
+        audio_bytes = await audio.read()
+        filename = audio.filename or "audio.m4a"
+        content_type = audio.content_type or "audio/m4a"
         
-        # 优先使用文件上传，如果没有则使用base64数据
-        if audio:
-            # 方式1: 文件上传
-            logger.info(f"[AUDIO] 使用文件上传方式 - filename: {audio.filename}, content_type: {audio.content_type}")
-            audio_bytes = await audio.read()
-            filename = audio.filename or "audio.m4a"
-            content_type = audio.content_type or "audio/m4a"
-            logger.info(f"[AUDIO] 文件读取成功，大小: {len(audio_bytes)} 字节")
-        elif audio_data:
-            # 方式2: base64编码的音频数据
-            try:
-                logger.info(f"[AUDIO] 使用 base64 数据方式，原始长度: {len(audio_data)} 字符")
-                # 移除可能的换行符和空白字符（Shortcut 可能每76字符换行）
-                audio_data_clean = audio_data.replace('\n', '').replace('\r', '').replace(' ', '')
-                logger.info(f"[AUDIO] 清理后长度: {len(audio_data_clean)} 字符")
-                # 解码base64数据
-                audio_bytes = base64.b64decode(audio_data_clean)
-                logger.info(f"[AUDIO] Base64 解码成功，音频字节长度: {len(audio_bytes)} 字节")
-                filename = audio_filename or "audio.m4a"
-                content_type = audio_content_type or "audio/m4a"
-            except Exception as e:
-                logger.error(f"[ERROR] Base64 解码失败: {str(e)}")
-                import traceback
-                logger.error(f"[ERROR] 错误详情: {traceback.format_exc()}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ErrorResponse(
-                        error=ErrorDetail(
-                            code="INVALID_AUDIO_DATA",
-                            message="音频数据格式错误",
-                            details=f"无法解码base64数据: {str(e)}"
-                        )
-                    ).model_dump()
-                )
-        else:
-            # 两种方式都没有提供
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ErrorResponse(
-                    error=ErrorDetail(
-                        code="MISSING_AUDIO",
-                        message="缺少音频数据",
-                        details="请提供audio文件或audio_data（base64编码）"
-                    )
-                ).model_dump()
-            )
+        logger.info(f"[AUDIO] 文件读取成功，大小: {len(audio_bytes)} 字节")
         
         if not audio_bytes:
             raise HTTPException(
@@ -247,70 +193,6 @@ async def analyze_audio(
         )
 
 
-@router.post("/api/v1/analyze-json", response_model=AnalyzeResponse)
-@router.post("/api/v1/analyze_json", response_model=AnalyzeResponse)  # 兼容下划线版本
-async def analyze_audio_json(request: AnalyzeJSONRequest):
-    """
-    分析音频文件（JSON格式，用于 Shortcut 等场景）
-    
-    接受 JSON 格式的请求，包含 base64 编码的音频数据
-    
-    - **timezone**: 时区字符串
-    - **current_time**: ISO 8601 格式的当前时间
-    - **audio_data**: base64 编码的音频数据
-    - **audio_filename**: 音频文件名（可选，默认 audio.m4a）
-    - **audio_content_type**: 音频MIME类型（可选，默认 audio/m4a）
-    
-    返回转录文本和提取的事件列表
-    """
-    try:
-        # 解码base64数据
-        try:
-            # 移除可能的换行符和空白字符（Shortcut 可能每76字符换行）
-            audio_data_clean = request.audio_data.replace('\n', '').replace('\r', '').replace(' ', '')
-            audio_bytes = base64.b64decode(audio_data_clean)
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ErrorResponse(
-                    error=ErrorDetail(
-                        code="INVALID_AUDIO_DATA",
-                        message="音频数据格式错误",
-                        details=f"无法解码base64数据: {str(e)}"
-                    )
-                ).model_dump()
-            )
-        
-        # 使用通用处理函数
-        return await process_audio_analysis(
-            audio_bytes=audio_bytes,
-            filename=request.audio_filename,
-            content_type=request.audio_content_type,
-            timezone=request.timezone,
-            current_time=request.current_time
-        )
-    
-    except HTTPException:
-        # 重新抛出 HTTP 异常
-        raise
-    except Exception as e:
-        # 处理其他未预期的错误
-        import traceback
-        error_trace = traceback.format_exc()
-        logger.error(f"[ERROR] 未预期的错误: {str(e)}")
-        logger.error(f"[ERROR] 错误详情: {error_trace}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ErrorResponse(
-                error=ErrorDetail(
-                    code="INTERNAL_ERROR",
-                    message="服务器内部错误",
-                    details=str(e)
-                )
-            ).model_dump()
-        )
-
-
 @router.get("/health")
 async def health_check():
     """健康检查端点"""
@@ -326,7 +208,6 @@ async def api_info():
         "description": "语音驱动的日程记录工具 API",
         "endpoints": {
             "analyze": "/api/v1/analyze",
-            "analyze_json": "/api/v1/analyze-json (或 /api/v1/analyze_json)",
             "health": "/health"
         }
     }

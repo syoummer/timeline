@@ -191,29 +191,29 @@ docker run -p 8000:8000 -e AI_BUILDER_TOKEN=your_token timeline
 
 ## 使用场景
 
-### iOS Shortcut 集成
+### Web 应用
 
-Timeline 设计用于与 iOS Shortcut 集成：
+Timeline 主要作为 Web 应用使用：
 
-1. iOS Shortcut 录音
+1. 在浏览器中录音
 2. 上传音频文件到 Timeline API
 3. 接收 JSON 格式的事件列表
-4. 在 Apple Calendar 中创建日历条目
+4. 在网页中查看和导出到日历（Apple Calendar 或 Google Calendar）
 
-**Shortcut 工作流程**：
+**Web 工作流程**：
 
 ```
-1. 开始录音
+1. 访问 Web 页面
    ↓
-2. 停止录音，获取音频文件
+2. 点击录音按钮开始录音
    ↓
-3. 获取当前日期和时间（包含时区信息）
+3. 停止录音，自动上传音频文件
    ↓
-4. HTTP POST 请求到服务端
+4. 接收分析结果（转录文本和事件列表）
    ↓
-5. 接收 JSON 响应
+5. 查看事件列表
    ↓
-6. 遍历 events 数组，为每个事件创建日历条目
+6. 导出到日历（Apple Calendar 或 Google Calendar）
 ```
 
 ## 开发说明
