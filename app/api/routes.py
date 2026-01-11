@@ -118,8 +118,8 @@ async def analyze_audio(
     current_time: str = Form(..., description="ISO 8601 格式的当前时间"),
     audio: Optional[UploadFile] = File(None, description="音频文件（支持 m4a、mp3、wav、flac 等格式）"),
     audio_data: Optional[str] = Form(None, description="音频数据（base64编码），与audio二选一"),
-    audio_filename: Optional[str] = Form(None, description="音频文件名（当使用audio_data时必需）"),
-    audio_content_type: Optional[str] = Form(None, description="音频MIME类型（当使用audio_data时可选，默认audio/m4a）")
+    audio_filename: Optional[str] = Form("audio.m4a", description="音频文件名（当使用audio_data时可选，默认audio.m4a）"),
+    audio_content_type: Optional[str] = Form("audio/m4a", description="音频MIME类型（当使用audio_data时可选，默认audio/m4a）")
 ):
     """
     分析音频文件，提取时间和事件信息
@@ -134,6 +134,10 @@ async def analyze_audio(
     返回转录文本和提取的事件列表
     """
     try:
+        # 添加调试日志
+        print(f"[DEBUG] 收到请求 - timezone: {timezone[:50] if timezone else None}, current_time: {current_time[:50] if current_time else None}")
+        print(f"[DEBUG] audio: {audio is not None}, audio_data: {audio_data[:100] if audio_data else None}...")
+        
         audio_bytes = None
         filename = "audio.m4a"
         content_type = "audio/m4a"
@@ -147,13 +151,19 @@ async def analyze_audio(
         elif audio_data:
             # 方式2: base64编码的音频数据
             try:
+                print(f"[DEBUG] 处理 base64 数据，长度: {len(audio_data)}")
                 # 移除可能的换行符和空白字符（Shortcut 可能每76字符换行）
                 audio_data_clean = audio_data.replace('\n', '').replace('\r', '').replace(' ', '')
+                print(f"[DEBUG] 清理后长度: {len(audio_data_clean)}")
                 # 解码base64数据
                 audio_bytes = base64.b64decode(audio_data_clean)
+                print(f"[DEBUG] 解码成功，音频字节长度: {len(audio_bytes)}")
                 filename = audio_filename or "audio.m4a"
                 content_type = audio_content_type or "audio/m4a"
             except Exception as e:
+                print(f"[ERROR] Base64 解码失败: {str(e)}")
+                import traceback
+                print(f"[ERROR] 错误详情: {traceback.format_exc()}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=ErrorResponse(
