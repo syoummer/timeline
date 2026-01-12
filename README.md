@@ -119,19 +119,20 @@ export AI_BUILDER_TOKEN=your_token_here
 ```json
 {
   "success": true,
-  "transcription": "我2点去买菜，3点去理发，4点到家",
   "events": [
     {
       "title": "买菜",
       "start_time": "2024-01-15T14:00:00+08:00",
       "end_time": "2024-01-15T15:00:00+08:00",
-      "description": "地点：超市"
+      "description": "地点：超市",
+      "tag": "生活"
     },
     {
       "title": "理发",
       "start_time": "2024-01-15T15:00:00+08:00",
       "end_time": "2024-01-15T15:30:00+08:00",
-      "description": "地点：理发店"
+      "description": "地点：理发店",
+      "tag": "生活"
     }
   ]
 }
