@@ -103,9 +103,39 @@ export AI_BUILDER_TOKEN=your_token_here
 
 ## API 文档
 
+### POST /api/v1/transcribe
+
+转录音频文件为文本。
+
+**请求格式**：
+- Content-Type: `multipart/form-data`
+- 参数：
+  - `audio`: 音频文件（必需，支持 m4a、mp3、wav、flac、webm 等格式）
+
+**响应示例**（成功，HTTP 200）：
+
+```json
+{
+  "success": true,
+  "transcription": "我2点去买菜，3点去理发，4点到家"
+}
+```
+
+**响应示例**（错误，HTTP 4xx/5xx）：
+
+```json
+{
+  "error": {
+    "code": "TRANSCRIPTION_FAILED",
+    "message": "语音识别失败，请重试",
+    "details": "无法识别音频格式"
+  }
+}
+```
+
 ### POST /api/v1/analyze
 
-分析音频文件，提取时间和事件信息。
+分析转录文本，提取时间和事件信息。
 
 **请求格式**：
 - Content-Type: `multipart/form-data`
@@ -162,9 +192,9 @@ export AI_BUILDER_TOKEN=your_token_here
 }
 ```
 
-### GET /
+### GET /api
 
-返回 API 信息。
+返回 API 信息，包括可用端点列表。
 
 ## 技术栈
 
