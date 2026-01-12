@@ -5,6 +5,44 @@ import pytz
 from dateutil import parser
 
 
+def extract_timezone_from_iso(iso_string: str) -> str:
+    """
+    从 ISO 8601 格式字符串中提取时区信息
+    
+    Args:
+        iso_string: ISO 8601 格式的时间字符串，如 '2024-01-15T14:30:00+08:00' 或 '2024-01-15T14:30:00Z'
+    
+    Returns:
+        时区字符串，如 '+08:00' 或 'UTC'（如果是 Z）或 '+00:00'（如果没有时区信息，默认 UTC）
+    
+    Raises:
+        ValueError: 如果无法解析 ISO 字符串
+    """
+    # 解析 ISO 时间字符串
+    dt = parser.isoparse(iso_string)
+    
+    # 如果有时区信息
+    if dt.tzinfo is not None:
+        # 获取时区偏移量
+        offset = dt.tzinfo.utcoffset(dt)
+        if offset is not None:
+            total_seconds = int(offset.total_seconds())
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            
+            # 如果是 UTC (偏移为 0)
+            if total_seconds == 0:
+                return 'UTC'
+            
+            # 格式化为 +HH:MM 或 -HH:MM
+            sign = '+' if hours >= 0 else '-'
+            abs_hours = abs(hours)
+            return f"{sign}{abs_hours:02d}:{minutes:02d}"
+    
+    # 如果没有时区信息，默认返回 UTC 偏移
+    return '+00:00'
+
+
 def parse_timezone(timezone_str: str) -> pytz.BaseTzInfo:
     """
     解析时区字符串
@@ -36,14 +74,14 @@ def parse_timezone(timezone_str: str) -> pytz.BaseTzInfo:
 
 def get_current_time_in_timezone(
     current_time_iso: str,
-    timezone_str: str
+    timezone_str: Optional[str] = None
 ) -> datetime:
     """
     获取指定时区的当前时间
     
     Args:
         current_time_iso: ISO 8601 格式的当前时间字符串
-        timezone_str: 时区字符串
+        timezone_str: 时区字符串（可选，如果不提供则从 ISO 字符串中提取）
     
     Returns:
         指定时区的 datetime 对象
@@ -54,6 +92,13 @@ def get_current_time_in_timezone(
     # 如果时间没有时区信息，假设为 UTC
     if dt.tzinfo is None:
         dt = pytz.UTC.localize(dt)
+    
+    # 如果没有提供 timezone_str，从 ISO 字符串中提取
+    if timezone_str is None:
+        timezone_str = extract_timezone_from_iso(current_time_iso)
+        # 如果提取的是 UTC，使用 'UTC' 字符串
+        if timezone_str == '+00:00':
+            timezone_str = 'UTC'
     
     # 转换到目标时区
     target_tz = parse_timezone(timezone_str)

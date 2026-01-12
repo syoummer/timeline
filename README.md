@@ -110,9 +110,9 @@ export AI_BUILDER_TOKEN=your_token_here
 **请求格式**：
 - Content-Type: `multipart/form-data`
 - 参数：
-  - `audio`: 音频文件（必需）
-  - `timezone`: 时区字符串，如 "Asia/Shanghai"（必需）
-  - `current_time`: ISO 8601 格式的当前时间（必需）
+  - `transcript`: 转录文本（必需）
+  - `current_time`: ISO 8601 格式的当前时间，应包含时区信息（必需，如 `2024-01-15T14:30:00+08:00`）
+  - `tags`: 可选的标签列表（逗号分隔）
 
 **响应示例**（成功，HTTP 200）：
 
@@ -228,8 +228,10 @@ Timeline 主要作为 Web 应用使用：
 
 ### 时区处理
 
-- 支持时区名称（如 "Asia/Shanghai"）
-- 支持时区偏移量（如 "+08:00"）
+- 时区信息从 ISO 8601 格式的 `current_time` 参数中自动提取
+- 支持时区偏移量（如 `+08:00`、`-05:00`）
+- 支持 UTC 指示符（`Z`）
+- 如果没有时区信息，默认使用 UTC
 - 自动处理时区转换
 
 ### 错误处理

@@ -12,7 +12,8 @@ from app.utils.timezone import (
     get_current_time_in_timezone,
     format_time_str,
     format_date_str,
-    get_past_time_iso
+    get_past_time_iso,
+    extract_timezone_from_iso
 )
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ async def _call_llm_and_parse(
 async def extract_events_with_llm(
     transcript: str,
     current_time_iso: str,
-    timezone_str: str,
+    timezone_str: Optional[str] = None,
     tags: Optional[List[str]] = None
 ) -> List[Event]:
     """
@@ -110,8 +111,8 @@ async def extract_events_with_llm(
     
     Args:
         transcript: 转录文本
-        current_time_iso: ISO 8601 格式的当前时间
-        timezone_str: 时区字符串
+        current_time_iso: ISO 8601 格式的当前时间（应包含时区信息）
+        timezone_str: 时区字符串（可选，如果不提供则从 current_time_iso 中提取）
         tags: 可选的标签列表，用于事件分类
     
     Returns:
@@ -121,6 +122,13 @@ async def extract_events_with_llm(
         httpx.HTTPStatusError: API 调用失败
         ValueError: LLM 返回格式错误
     """
+    # 如果没有提供 timezone_str，从 ISO 字符串中提取
+    if timezone_str is None:
+        timezone_str = extract_timezone_from_iso(current_time_iso)
+        # 如果提取的是 UTC 偏移，尝试转换为更友好的格式
+        if timezone_str == '+00:00':
+            timezone_str = 'UTC'
+    
     # 获取当前时间（在指定时区）
     current_dt = get_current_time_in_timezone(current_time_iso, timezone_str)
     

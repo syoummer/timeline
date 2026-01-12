@@ -121,22 +121,20 @@ async def transcribe_audio_endpoint(
 @router.post("/api/v1/analyze", response_model=AnalyzeResponse)
 async def analyze_text(
     transcript: str = Form(..., description="转录文本"),
-    timezone: str = Form(..., description="时区字符串，如 'Asia/Shanghai' 或 '+08:00'"),
-    current_time: str = Form(..., description="ISO 8601 格式的当前时间"),
+    current_time: str = Form(..., description="ISO 8601 格式的当前时间（应包含时区信息，如 '2024-01-15T14:30:00+08:00'）"),
     tags: str = Form(None, description="可选的标签列表（逗号分隔）")
 ):
     """
     分析转录文本，提取时间和事件信息
     
     - **transcript**: 转录文本
-    - **timezone**: 时区字符串（如 'Asia/Shanghai' 或 '+08:00'）
-    - **current_time**: 当前时间（ISO 8601 格式，如 '2024-01-15T14:30:00+08:00'）
+    - **current_time**: 当前时间（ISO 8601 格式，应包含时区信息，如 '2024-01-15T14:30:00+08:00'）
     
     返回提取的事件列表
     """
     try:
         # 添加详细的请求日志
-        logger.info(f"[REQUEST] 收到分析请求 - timezone: {timezone}, current_time: {current_time[:50] if current_time else None}")
+        logger.info(f"[REQUEST] 收到分析请求 - current_time: {current_time[:50] if current_time else None}")
         logger.info(f"[REQUEST] transcript 长度: {len(transcript) if transcript else 0} 字符")
         
         # 验证转录文本不为空
@@ -161,12 +159,11 @@ async def analyze_text(
             logger.info(f"[EXTRACTION] 提供的标签列表: {tags_list}")
         
         # LLM 事件提取
-        logger.info(f"[EXTRACTION] 开始事件提取 - timezone: {timezone}, current_time: {current_time}")
+        logger.info(f"[EXTRACTION] 开始事件提取 - current_time: {current_time}")
         try:
             events = await extract_events_with_llm(
                 transcript=transcript,
                 current_time_iso=current_time,
-                timezone_str=timezone,
                 tags=tags_list
             )
             logger.info(f"[EXTRACTION] 事件提取成功 - 提取到 {len(events)} 个事件")

@@ -29,7 +29,6 @@ def test_analyze_missing_file():
     response = client.post(
         "/api/v1/analyze",
         data={
-            "timezone": "Asia/Shanghai",
             "current_time": "2024-01-15T10:30:00+08:00"
         }
     )
